@@ -1,0 +1,4 @@
+#!/bin/zsh
+
+sbt assembly
+jar -uf ./target/scala-2.12/spr-clsr-test-env-0.1.0.jar application.conf
