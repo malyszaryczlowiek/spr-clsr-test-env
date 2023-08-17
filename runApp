@@ -3,59 +3,128 @@
 chmod +x generateJAR
 
 do_not_build=false
+close_app=false
+
+function stop_all {
+  docker stop spark-driver-program
+  docker rm -v spark-driver-program
+  #docker rmi spr-clsr-test-env_spark-submitter
+  docker rmi driver-program
+
+  docker stop spark-worker-2
+  docker rm -v spark-worker-2
+  docker rmi spr-clsr-test-env_spark-worker-2
+
+  docker stop spark-worker-1
+  docker rm -v spark-worker-1
+  docker rmi spr-clsr-test-env_spark-worker-1
+
+  docker stop spark-master
+  docker rm -v spark-master
+  docker rmi spr-clsr-test-env_spark-master
+}
+
 
 for arr in $@ ; do
 
   if [[ $arr = "--restartAll" ]] ; then
     echo "Restarting Spark App."
     echo "Removing Docker container."
-
-    docker stop spark-submitter
-    docker rm -v spark-submitter
-    docker rmi spr-clsr-test-env_spark-submitter
-
-    docker stop spark-worker-2
-    docker rm -v spark-worker-2
-    docker rmi spr-clsr-test-env_spark-worker-2
-
-    docker stop spark-worker-1
-    docker rm -v spark-worker-1
-    docker rmi spr-clsr-test-env_spark-worker-1
-
-    docker stop spark-master
-    docker rm -v spark-master
-    docker rmi spr-clsr-test-env_spark-master
+    stop_all
   fi
 
   if [[ $arr = "--restart" ]] ; then
-      echo "Restarting Spark App."
-      echo "Removing Docker container."
+    echo "Restarting Spark App."
+    echo "Removing Docker container."
 
-      docker stop spark-submitter
-      docker rm -v spark-submitter
-      docker rmi spr-clsr-test-env_spark-submitter
+    docker stop spark-driver-program
+    docker rm -v spark-driver-program
+    docker rmi driver-program
 
-      fi
+#      docker stop spark-submitter
+#      docker rm -v spark-submitter
+#      docker rmi spr-clsr-test-env_spark-submitter
+
+  fi
 
   if [[ $arr = "--do-not-build" ]] ; then
     do_not_build=true
   fi
 
+  if [[ $arr = "--close-app" ]] ; then
+    close_app=true
+  fi
+
 done
 
-if [[ $do_not_build = false ]] ; then
-  echo "Removing Binaries."
-  rm -rf ./target/scala-2.12/
-  ./generateJAR
-  # rm -rf $HOME/spr-clsr-test-env/logs/application.log
+
+
+
+if [[ $close_app = false ]] ; then
+
+  docker-compose up -d # --build
+
+  if [[ $do_not_build = false ]] ; then
+    echo "Removing Binaries."
+  #  rm -rf ./target/scala-2.12/
+  #  ./generateJAR
+    cp log4j2.xml ./dockerfiles/driver-program/log4j2.xml
+    cp ./target/scala-2.12/spr-clsr-test-env-0.1.0.jar ./dockerfiles/driver-program/spr-clsr-test-env-0.1.0.jar
+    cd ./dockerfiles/driver-program
+
+    docker build -t driver-program .
+
+    rm -rf ./log4j2.xml
+    rm -rf ./spr-clsr-test-env-0.1.0.jar
+    cd ../..
+
+    docker run -d \
+      -p 8085:8080 \
+      -p 7080:7077 \
+      -e SPARK_MODE=worker \
+      -e SPARK_MASTER_URL=spark://spark-master:7077 \
+      -e SPARK_WORKER_MEMORY=1G \
+      -e SPARK_WORKER_CORES=2 \
+      -e SPARK_RPC_AUTHENTICATION_ENABLED=no \
+      -e SPARK_RPC_ENCRYPTION_ENABLED=no \
+      -e SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no \
+      -e SPARK_SSL_ENABLED=no \
+      --network=spark-network \
+      --name spark-driver-program \
+      driver-program
+      #
+  #  docker network connect spark-network spark-submitter
+    # rm -rf $HOME/spr-clsr-test-env/logs/application.log
+ fi
+
+else
+  # closing all
+  stop_all
 fi
 
-cp log4j2.xml ./dockerfiles/log4j2.xml
-
-cp ./target/scala-2.12/spr-clsr-test-env-0.1.0.jar ./dockerfiles/spr-clsr-test-env-0.1.0.jar
 
 
-docker-compose up -d # --build
 
-rm -rf ./dockerfiles/log4j2.xml
-rm -rf ./dockerfiles/spr-clsr-test-env-0.1.0.jar
+#if [[ $do_not_build = false ]] ; then
+#  echo "Removing Binaries."
+#  rm -rf ./target/scala-2.12/
+#  ./generateJAR
+#  # rm -rf $HOME/spr-clsr-test-env/logs/application.log
+#fi
+#
+#cp log4j2.xml ./dockerfiles/log4j2.xml
+#cp ./target/scala-2.12/spr-clsr-test-env-0.1.0.jar ./dockerfiles/spr-clsr-test-env-0.1.0.jar
+#
+#
+#docker-compose up -d # --build
+#
+#rm -rf ./dockerfiles/log4j2.xml
+#rm -rf ./dockerfiles/spr-clsr-test-env-0.1.0.jar
+
+
+
+
+
+
+
+
